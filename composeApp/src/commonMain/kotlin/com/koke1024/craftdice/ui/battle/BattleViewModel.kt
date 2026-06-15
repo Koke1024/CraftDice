@@ -1,10 +1,15 @@
 package com.koke1024.craftdice.ui.battle
 
+import com.koke1024.craftdice.domain.battle.BattleEngine
+import com.koke1024.craftdice.domain.battle.ai.EnemyAI
+import com.koke1024.craftdice.domain.battle.ai.PlayerDiceInfo
+import com.koke1024.craftdice.domain.battle.model.BattleSide
+import com.koke1024.craftdice.domain.battle.model.BattleUnit
+import com.koke1024.craftdice.domain.battle.model.BattleConfig
+import com.koke1024.craftdice.domain.battle.model.BattleRule
 import com.koke1024.craftdice.domain.model.Dice
 import com.koke1024.craftdice.domain.model.DiceFace
-import com.koke1024.craftdice.domain.model.SkillType
 import com.koke1024.craftdice.domain.physics.DicePhysicsEngine
-import com.koke1024.craftdice.domain.physics.DiceSetup
 import com.koke1024.craftdice.domain.physics.PhysicsConstraints
 import com.koke1024.craftdice.domain.physics.PhysicsEngine
 import com.koke1024.craftdice.domain.physics.ThrowInput
@@ -21,13 +26,17 @@ import kotlinx.coroutines.launch
 
 class BattleViewModel(
     private val physicsEngine: PhysicsEngine = DicePhysicsEngine(),
+    private val battleEngine: BattleEngine = BattleEngine(),
+    private val enemyAI: EnemyAI = EnemyAI(),
 ) : ViewModel() {
+
+    private val rule: BattleRule = BattleRule.BUMP
 
     private val _uiState = MutableStateFlow(BattleUiState())
     val uiState: StateFlow<BattleUiState> = _uiState.asStateFlow()
 
     private var simulationJob: Job? = null
-    private var nextDiceId = 0
+    private val diceOwner: MutableMap<Int, BattleSide> = mutableMapOf()
 
     init {
         setupDefaultBattle()
@@ -36,50 +45,84 @@ class BattleViewModel(
     fun setupDefaultBattle() {
         simulationJob?.cancel()
         physicsEngine.reset()
-        nextDiceId = 0
+        diceOwner.clear()
 
-        val playerDice = createSampleDice()
+        val playerUnits = listOf(
+            BattleUnit.fromDice(0, BattleSide.PLAYER1, "プレイヤーA", attackerDice(), BattleConfig.DEFAULT_HP),
+            BattleUnit.fromDice(1, BattleSide.PLAYER1, "プレイヤーB", balancedDice(), BattleConfig.DEFAULT_HP),
+        )
+        val enemyUnits = listOf(
+            BattleUnit.fromDice(2, BattleSide.PLAYER2, "エネミーA", balancedDice(), BattleConfig.DEFAULT_HP),
+            BattleUnit.fromDice(3, BattleSide.PLAYER2, "エネミーB", tankDice(), BattleConfig.DEFAULT_HP),
+        )
+        battleEngine.setup(playerUnits, enemyUnits, rule)
+        registerAll(playerUnits + enemyUnits)
+
+        _uiState.value = BattleUiState(
+            canThrow = true,
+            playerUnits = playerUnits.map { it.toUnitUi() },
+            enemyUnits = enemyUnits.map { it.toUnitUi() },
+            round = battleEngine.round,
+            status = battleEngine.state.status.toUi(),
+        )
+    }
+
+    private fun registerAll(units: List<BattleUnit>) {
         val centerX = PhysicsConstraints.TRAY_WIDTH / 2.0
         val centerY = PhysicsConstraints.TRAY_HEIGHT / 2.0
+        val playerUnits = units.filter { it.owner == BattleSide.PLAYER1 }
+        val enemyUnits = units.filter { it.owner == BattleSide.PLAYER2 }
+        placeSide(playerUnits, centerX * 0.5, centerY)
+        placeSide(enemyUnits, centerX * 1.5, centerY)
+        units.forEach { diceOwner[it.id] = it.owner }
+    }
 
-        physicsEngine.addDice(nextDiceId, playerDice, Vector2(centerX - 40.0, centerY))
-        nextDiceId++
-        physicsEngine.addDice(nextDiceId, playerDice, Vector2(centerX + 40.0, centerY))
-        nextDiceId++
-
-        updateSnapshots()
-        _uiState.value = _uiState.value.copy(isRolling = false, rollResults = emptyList(), canThrow = true)
+    private fun placeSide(units: List<BattleUnit>, baseX: Double, centerY: Double) {
+        val spacing = 50.0
+        val startY = centerY - (units.size - 1) * spacing / 2.0
+        units.forEachIndexed { index, unit ->
+            physicsEngine.addDice(unit.id, unit.dice, Vector2(baseX, startY + index * spacing))
+        }
     }
 
     fun throwAllDice(velocityMultiplier: Double = 1.0) {
-        if (_uiState.value.isRolling) return
+        if (_uiState.value.isRolling || battleEngine.isFinished) return
 
-        val bodies = physicsEngine.getSnapshots()
-        if (bodies.isEmpty()) return
+        val snapshots = physicsEngine.getSnapshots()
+        if (snapshots.isEmpty()) return
 
         val centerX = PhysicsConstraints.TRAY_WIDTH / 2.0
         val centerY = PhysicsConstraints.TRAY_HEIGHT / 2.0
 
-        for (snap in bodies) {
+        for (snap in snapshots) {
+            val owner = diceOwner[snap.id] ?: BattleSide.PLAYER1
+            if (owner == BattleSide.PLAYER2) continue
             val dir = Vector2(snap.position.x - centerX, snap.position.y - centerY).normalize()
             val speed = (200.0 + kotlin.random.Random.nextDouble(300.0)) * velocityMultiplier
-            val velocity = dir * speed
-            physicsEngine.throwDice(ThrowInput(snap.id, velocity))
+            physicsEngine.throwDice(ThrowInput(snap.id, dir * speed))
         }
+
+        throwEnemyDice()
 
         _uiState.value = _uiState.value.copy(isRolling = true, canThrow = false, rollResults = emptyList())
         startSimulation()
     }
 
-    fun throwDice(
-        id: Int,
-        velocityX: Double,
-        velocityY: Double,
-    ) {
-        if (_uiState.value.isRolling) return
-        physicsEngine.throwDice(ThrowInput(id, Vector2(velocityX, velocityY)))
-        _uiState.value = _uiState.value.copy(isRolling = true, canThrow = false, rollResults = emptyList())
-        startSimulation()
+    private fun throwEnemyDice() {
+        val playerTargets = physicsEngine.getSnapshots()
+            .filter { diceOwner[it.id] == BattleSide.PLAYER1 }
+            .map { PlayerDiceInfo(it.id, it.position, faceValueFor(it.face)) }
+        val plans = enemyAI.planThrows(battleEngine.state, rule, playerTargets)
+        for (plan in plans) {
+            physicsEngine.throwDice(ThrowInput(plan.unitId, plan.velocity))
+        }
+    }
+
+    private fun faceValueFor(face: com.koke1024.craftdice.domain.model.DiceFace): Int = when (face.skillType) {
+        com.koke1024.craftdice.domain.model.SkillType.CRIT -> face.value + 2
+        com.koke1024.craftdice.domain.model.SkillType.ATK, com.koke1024.craftdice.domain.model.SkillType.HEAL -> face.value
+        com.koke1024.craftdice.domain.model.SkillType.DEF -> 3
+        com.koke1024.craftdice.domain.model.SkillType.MISS -> 0
     }
 
     fun updateSwipePreview(
@@ -91,10 +134,7 @@ class BattleViewModel(
         val dx = endX - startX
         val dy = endY - startY
         val power = (kotlin.math.hypot(dx, dy) / 200.0).coerceIn(0.0, 1.0).toFloat()
-        _uiState.value =
-            _uiState.value.copy(
-                swipePreview = SwipePreviewUi(startX, startY, endX, endY, power),
-            )
+        _uiState.value = _uiState.value.copy(swipePreview = SwipePreviewUi(startX, startY, endX, endY, power))
     }
 
     fun clearSwipePreview() {
@@ -103,7 +143,7 @@ class BattleViewModel(
 
     fun onSwipeEnd(result: SwipeResult) {
         clearSwipePreview()
-        if (_uiState.value.isRolling) return
+        if (_uiState.value.isRolling || battleEngine.isFinished) return
         if (result.distance < 20f) return
 
         val (vx, vy) = result.toVelocity()
@@ -111,20 +151,23 @@ class BattleViewModel(
     }
 
     private fun throwAllDiceWithVelocity(vx: Double, vy: Double) {
-        if (_uiState.value.isRolling) return
+        if (_uiState.value.isRolling || battleEngine.isFinished) return
 
-        val bodies = physicsEngine.getSnapshots()
-        if (bodies.isEmpty()) return
+        val snapshots = physicsEngine.getSnapshots()
+        if (snapshots.isEmpty()) return
 
-        for (snap in bodies) {
-            val jitter = 50.0
-            val velocity =
-                Vector2(
-                    vx + kotlin.random.Random.nextDouble(-jitter, jitter),
-                    vy + kotlin.random.Random.nextDouble(-jitter, jitter),
-                )
+        val jitter = 50.0
+        for (snap in snapshots) {
+            val owner = diceOwner[snap.id] ?: BattleSide.PLAYER1
+            if (owner == BattleSide.PLAYER2) continue
+            val velocity = Vector2(
+                vx + kotlin.random.Random.nextDouble(-jitter, jitter),
+                vy + kotlin.random.Random.nextDouble(-jitter, jitter),
+            )
             physicsEngine.throwDice(ThrowInput(snap.id, velocity))
         }
+
+        throwEnemyDice()
 
         _uiState.value = _uiState.value.copy(isRolling = true, canThrow = false, rollResults = emptyList())
         startSimulation()
@@ -132,66 +175,109 @@ class BattleViewModel(
 
     private fun startSimulation() {
         simulationJob?.cancel()
-        simulationJob =
-            viewModelScope.launch {
-                val timeStep = PhysicsConstraints.FIXED_TIME_STEP
-                while (isActive) {
-                    physicsEngine.step(timeStep)
-                    updateSnapshots()
-                    if (physicsEngine.isAllStopped()) {
-                        finishRoll()
-                        break
-                    }
-                    delay((timeStep * 1000).toLong())
+        simulationJob = viewModelScope.launch {
+            val timeStep = PhysicsConstraints.FIXED_TIME_STEP
+            while (isActive) {
+                physicsEngine.step(timeStep)
+                updateSnapshots()
+                if (physicsEngine.isAllStopped()) {
+                    finishRoll()
+                    break
                 }
+                delay((timeStep * 1000).toLong())
             }
+        }
     }
 
     private fun finishRoll() {
         val results = physicsEngine.getResults()
-        val resultUi =
-            results.results.map { entry ->
-                RollResultUi(
-                    diceId = entry.diceId,
-                    faceLabel = entry.face.toLabel(),
-                    faceColor = entry.face.toColor(),
-                )
-            }
-        _uiState.value =
-            _uiState.value.copy(
-                isRolling = false,
-                rollResults = resultUi,
-                canThrow = true,
+        val resolution = battleEngine.resolveRound(results)
+
+        val resultUi = results.results.map { entry ->
+            RollResultUi(
+                diceId = entry.diceId,
+                faceLabel = entry.face.toLabel(),
+                faceColor = entry.face.toColor(),
             )
+        }
+        val state = battleEngine.state
+        val log = resolution.steps.map { it.message }
+
+        _uiState.value = _uiState.value.copy(
+            isRolling = false,
+            rollResults = resultUi,
+            canThrow = !battleEngine.isFinished,
+            playerUnits = state.player1Units.map { it.toUnitUi() },
+            enemyUnits = state.player2Units.map { it.toUnitUi() },
+            round = battleEngine.round,
+            status = state.status.toUi(),
+            log = log,
+        )
+        reseedPhysicsFromState()
+    }
+
+    private fun reseedPhysicsFromState() {
+        physicsEngine.reset()
+        for (unit in battleEngine.state.allUnits) {
+            if (!unit.isAlive) continue
+            val owner = unit.owner
+            val centerX = PhysicsConstraints.TRAY_WIDTH / 2.0
+            val centerY = PhysicsConstraints.TRAY_HEIGHT / 2.0
+            val baseX = if (owner == BattleSide.PLAYER1) centerX * 0.5 else centerX * 1.5
+            physicsEngine.addDice(unit.id, unit.dice, Vector2(baseX, centerY))
+        }
+        updateSnapshots()
     }
 
     private fun updateSnapshots() {
-        val snapshots =
-            physicsEngine.getSnapshots().map { snap ->
-                DiceSnapshotUi(
-                    id = snap.id,
-                    x = snap.position.x.toFloat(),
-                    y = snap.position.y.toFloat(),
-                    radius = snap.radius.toFloat(),
-                    faceLabel = snap.face.toLabel(),
-                    faceColor = snap.face.toColor(),
-                    isStopped = snap.isStopped,
-                )
-            }
+        val snapshots = physicsEngine.getSnapshots().map { snap ->
+            val owner = diceOwner[snap.id] ?: BattleSide.PLAYER1
+            DiceSnapshotUi(
+                id = snap.id,
+                x = snap.position.x.toFloat(),
+                y = snap.position.y.toFloat(),
+                radius = snap.radius.toFloat(),
+                faceLabel = snap.face.toLabel(),
+                faceColor = snap.face.toColor(),
+                isStopped = snap.isStopped,
+                ownerLabel = owner.displayName,
+            )
+        }
         _uiState.value = _uiState.value.copy(diceSnapshots = snapshots)
     }
 
-    private fun createSampleDice(): Dice =
-        Dice(
-            listOf(
-                DiceFace.attack(10),
-                DiceFace.defense(),
-                DiceFace.heal(5),
-                DiceFace.critical(20),
-                DiceFace.miss(),
-                DiceFace.attack(5),
-            ),
-        )
+    private fun attackerDice(): Dice = Dice(
+        listOf(
+            DiceFace.attack(3),
+            DiceFace.attack(3),
+            DiceFace.attack(5),
+            DiceFace.miss(),
+            DiceFace.critical(8),
+            DiceFace.attack(2),
+        ),
+    )
+
+    private fun balancedDice(): Dice = Dice(
+        listOf(
+            DiceFace.attack(2),
+            DiceFace.heal(4),
+            DiceFace.attack(3),
+            DiceFace.defense(),
+            DiceFace.attack(4),
+            DiceFace.miss(),
+        ),
+    )
+
+    private fun tankDice(): Dice = Dice(
+        listOf(
+            DiceFace.defense(),
+            DiceFace.defense(),
+            DiceFace.attack(4),
+            DiceFace.attack(4),
+            DiceFace.miss(),
+            DiceFace.attack(6),
+        ),
+    )
 
     override fun onCleared() {
         super.onCleared()

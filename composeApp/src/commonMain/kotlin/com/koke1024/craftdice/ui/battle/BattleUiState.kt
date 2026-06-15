@@ -1,6 +1,9 @@
 package com.koke1024.craftdice.ui.battle
 
+import com.koke1024.craftdice.domain.battle.model.BattleStatus
+import com.koke1024.craftdice.domain.battle.model.BattleUnit
 import com.koke1024.craftdice.domain.model.DiceFace
+import com.koke1024.craftdice.domain.model.SkillType
 
 data class BattleUiState(
     val diceSnapshots: List<DiceSnapshotUi> = emptyList(),
@@ -8,6 +11,11 @@ data class BattleUiState(
     val rollResults: List<RollResultUi> = emptyList(),
     val canThrow: Boolean = true,
     val swipePreview: SwipePreviewUi? = null,
+    val playerUnits: List<UnitUi> = emptyList(),
+    val enemyUnits: List<UnitUi> = emptyList(),
+    val round: Int = 1,
+    val status: BattleStatusUi = BattleStatusUi.ONGOING,
+    val log: List<String> = emptyList(),
 )
 
 data class DiceSnapshotUi(
@@ -18,6 +26,7 @@ data class DiceSnapshotUi(
     val faceLabel: String,
     val faceColor: Long,
     val isStopped: Boolean,
+    val ownerLabel: String,
 )
 
 data class RollResultUi(
@@ -34,20 +43,47 @@ data class SwipePreviewUi(
     val power: Float,
 )
 
+data class UnitUi(
+    val id: Int,
+    val name: String,
+    val maxHp: Int,
+    val currentHp: Int,
+    val brokenFaceCount: Int,
+    val totalFaces: Int,
+)
+
+enum class BattleStatusUi { ONGOING, PLAYER1_WON, PLAYER2_WON, DRAW }
+
+internal fun BattleStatus.toUi(): BattleStatusUi = when (this) {
+    BattleStatus.ONGOING -> BattleStatusUi.ONGOING
+    BattleStatus.PLAYER1_WON -> BattleStatusUi.PLAYER1_WON
+    BattleStatus.PLAYER2_WON -> BattleStatusUi.PLAYER2_WON
+    BattleStatus.DRAW -> BattleStatusUi.DRAW
+}
+
+internal fun BattleUnit.toUnitUi(): UnitUi = UnitUi(
+    id = id,
+    name = name,
+    maxHp = maxHp,
+    currentHp = currentHp,
+    brokenFaceCount = brokenFaceIndices.size,
+    totalFaces = dice.faceCount,
+)
+
 internal fun DiceFace.toLabel(): String =
     when (skillType) {
-        com.koke1024.craftdice.domain.model.SkillType.ATK -> "攻$value"
-        com.koke1024.craftdice.domain.model.SkillType.DEF -> "防"
-        com.koke1024.craftdice.domain.model.SkillType.HEAL -> "回$value"
-        com.koke1024.craftdice.domain.model.SkillType.CRIT -> "必$value"
-        com.koke1024.craftdice.domain.model.SkillType.MISS -> "ﾐｽ"
+        SkillType.ATK -> "攻$value"
+        SkillType.DEF -> "防"
+        SkillType.HEAL -> "回$value"
+        SkillType.CRIT -> "必$value"
+        SkillType.MISS -> "ﾐｽ"
     }
 
 internal fun DiceFace.toColor(): Long =
     when (skillType) {
-        com.koke1024.craftdice.domain.model.SkillType.ATK -> 0xFFEF5350
-        com.koke1024.craftdice.domain.model.SkillType.DEF -> 0xFF42A5F5
-        com.koke1024.craftdice.domain.model.SkillType.HEAL -> 0xFF66BB6A
-        com.koke1024.craftdice.domain.model.SkillType.CRIT -> 0xFFFFCA28
-        com.koke1024.craftdice.domain.model.SkillType.MISS -> 0xFF9E9E9E
+        SkillType.ATK -> 0xFFEF5350
+        SkillType.DEF -> 0xFF42A5F5
+        SkillType.HEAL -> 0xFF66BB6A
+        SkillType.CRIT -> 0xFFFFCA28
+        SkillType.MISS -> 0xFF9E9E9E
     }

@@ -11,11 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -40,16 +43,21 @@ fun BattleScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Battle - Dice Physics") })
+            TopAppBar(title = { Text("Battle - Round ${uiState.round}") })
         },
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            UnitsRow(label = "Player", units = uiState.playerUnits, barColor = Color(0xFF42A5F5))
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             DiceTray(
                 state = uiState,
                 modifier = Modifier.fillMaxWidth(),
@@ -58,7 +66,16 @@ fun BattleScreen(
                 onSwipeCancel = viewModel::clearSwipePreview,
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            UnitsRow(label = "Enemy", units = uiState.enemyUnits, barColor = Color(0xFFEF5350))
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (uiState.status != BattleStatusUi.ONGOING) {
+                StatusBanner(status = uiState.status)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             RollControls(
                 state = uiState,
@@ -66,9 +83,98 @@ fun BattleScreen(
                 onReset = viewModel::setupDefaultBattle,
             )
 
-            if (uiState.rollResults.isNotEmpty()) {
+            if (uiState.log.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                LogPanel(log = uiState.log)
+            } else if (uiState.rollResults.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(16.dp))
                 ResultsPanel(results = uiState.rollResults)
+            }
+        }
+    }
+}
+
+@Composable
+private fun UnitsRow(
+    label: String,
+    units: List<UnitUi>,
+    barColor: Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        units.forEach { unit ->
+            Card(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text(
+                        text = unit.name,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    Text(
+                        text = "HP ${unit.currentHp}/${unit.maxHp}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    val ratio = if (unit.maxHp == 0) 0f else unit.currentHp.toFloat() / unit.maxHp
+                    LinearProgressIndicator(
+                        progress = { ratio.coerceIn(0f, 1f) },
+                        color = barColor,
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    )
+                    if (unit.brokenFaceCount > 0) {
+                        Text(
+                            text = "面欠損 ${unit.brokenFaceCount}/${unit.totalFaces}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusBanner(status: BattleStatusUi) {
+    val text = when (status) {
+        BattleStatusUi.PLAYER1_WON -> "勝利!"
+        BattleStatusUi.PLAYER2_WON -> "敗北…"
+        BattleStatusUi.DRAW -> "引き分け"
+        BattleStatusUi.ONGOING -> ""
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(16.dp),
+        )
+    }
+}
+
+@Composable
+private fun LogPanel(log: List<String>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = "Battle Log", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            log.forEach { line ->
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 2.dp),
+                )
             }
         }
     }
@@ -120,7 +226,7 @@ private fun RollControls(
             enabled = state.canThrow,
             modifier = Modifier.weight(1f),
         ) {
-            Text(if (state.isRolling) "Rolling..." else "Roll All")
+            Text(if (state.isRolling) "Rolling..." else if (state.status != BattleStatusUi.ONGOING) "Finished" else "Roll")
         }
         Spacer(modifier = Modifier.width(8.dp))
         Button(

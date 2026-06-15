@@ -1,5 +1,7 @@
 package com.koke1024.craftdice.di
 
+import com.koke1024.craftdice.domain.battle.BattleEngine
+import com.koke1024.craftdice.domain.battle.ai.EnemyAI
 import com.koke1024.craftdice.domain.physics.DicePhysicsEngine
 import com.koke1024.craftdice.domain.physics.PhysicsEngine
 import com.koke1024.craftdice.ui.battle.BattleViewModel
@@ -15,6 +17,8 @@ expect fun platformModule(): Module
 val appModule =
     module {
         singleOf(::DicePhysicsEngine) { bind<PhysicsEngine>() }
+        singleOf(::BattleEngine)
+        singleOf(::EnemyAI)
         viewModelOf(::HomeViewModel)
         viewModelOf(::BattleViewModel)
     }
