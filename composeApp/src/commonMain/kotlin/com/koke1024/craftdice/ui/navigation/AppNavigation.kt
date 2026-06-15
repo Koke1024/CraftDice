@@ -10,6 +10,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.koke1024.craftdice.ui.battle.BattleScreen
 import com.koke1024.craftdice.ui.home.HomeScreen
 
 object Routes {
@@ -35,7 +36,9 @@ fun AppNavigation(
             )
         }
         composable(Routes.BATTLE) {
-            PlaceholderScreen("Battle")
+            BattleScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
         }
         composable(Routes.CRAFT) {
             PlaceholderScreen("Craft")
