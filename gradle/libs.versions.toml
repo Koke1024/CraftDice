@@ -11,6 +11,8 @@ serialization = "1.7.3"
 datetime = "0.6.1"
 napier = "2.7.1"
 turbine = "1.2.0"
+sqlite-jdbc = "3.47.1.0"
+sqldelight-jdbc-driver = "2.1.0"
 androidx-lifecycle = "2.8.4"
 navigation = "2.8.0-alpha10"
 kotlin-test = "2.1.0"
@@ -25,6 +27,7 @@ kotlin-test-annotations = { module = "org.jetbrains.kotlin:kotlin-test-annotatio
 # Coroutines
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 
 # Serialization
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
@@ -41,7 +44,10 @@ koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
 # SQLDelight
 sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+sqldelight-jdbc-driver = { module = "app.cash.sqldelight:jdbc-driver", version.ref = "sqldelight-jdbc-driver" }
 sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
+
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 
 # Logging
 napier = { module = "io.github.aakira:napier", version.ref = "napier" }

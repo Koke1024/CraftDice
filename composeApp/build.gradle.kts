@@ -1,3 +1,4 @@
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
@@ -29,6 +30,12 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
+        }
+    }
+
+    jvm("desktop") {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
         }
     }
 
@@ -74,12 +81,25 @@ kotlin {
         iosMain.dependencies {
             implementation(libs.sqldelight.native.driver)
         }
+
+        val desktopMain by getting {
+            dependencies {
+                implementation(compose.desktop.currentOs)
+                implementation(libs.sqldelight.jdbc.driver)
+                implementation(libs.sqlite.jdbc)
+                implementation(libs.kotlinx.coroutines.swing)
+            }
+        }
     }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     compilerOptions {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(17)
 }
 
 android {
@@ -136,5 +156,22 @@ tasks.withType<app.cash.sqldelight.gradle.VerifyMigrationTask>().configureEach {
     doFirst {
         sqliteTmpDir.mkdirs()
         System.setProperty("java.io.tmpdir", sqliteTmpDir.absolutePath)
+    }
+}
+
+compose.desktop.application {
+    from(kotlin.targets["desktop"])
+
+    mainClass = "com.koke1024.craftdice.MainKt"
+
+    nativeDistributions {
+        targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Dmg)
+        packageName = "CraftDice"
+        packageVersion = "1.0.0"
+
+        windows {
+            menuGroup = "CraftDice"
+            upgradeUuid = "f4a2c1e0-3b5d-4f7e-9a8c-1d2e3f4a5b6c"
+        }
     }
 }
