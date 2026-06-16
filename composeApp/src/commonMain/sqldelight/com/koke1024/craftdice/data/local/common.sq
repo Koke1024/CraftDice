@@ -3,3 +3,34 @@ CREATE TABLE IF NOT EXISTS metadata (
     key TEXT NOT NULL UNIQUE,
     value TEXT NOT NULL
 );
+
+CREATE TABLE meta_progress (
+    id INTEGER NOT NULL PRIMARY KEY,
+    dice_shards INTEGER NOT NULL,
+    total_earned INTEGER NOT NULL,
+    selected_class_id TEXT NOT NULL
+);
+
+selectMetaProgress:
+SELECT meta_progress.*
+FROM meta_progress
+WHERE id = 1;
+
+upsertMetaProgress:
+INSERT OR REPLACE INTO meta_progress(id, dice_shards, total_earned, selected_class_id)
+VALUES (?, ?, ?, ?);
+
+CREATE TABLE purchased_upgrade (
+    upgrade_id TEXT NOT NULL PRIMARY KEY
+);
+
+selectAllPurchasedUpgrades:
+SELECT upgrade_id
+FROM purchased_upgrade;
+
+insertPurchasedUpgrade:
+INSERT OR IGNORE INTO purchased_upgrade(upgrade_id)
+VALUES (?);
+
+deleteAllPurchasedUpgrades:
+DELETE FROM purchased_upgrade;

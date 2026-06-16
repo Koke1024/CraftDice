@@ -1,7 +1,12 @@
 package com.koke1024.craftdice.di
 
+import com.koke1024.craftdice.data.local.CraftDiceDatabase
+import com.koke1024.craftdice.data.local.DatabaseDriverFactory
+import com.koke1024.craftdice.data.repository.MetaProgressRepository
+import com.koke1024.craftdice.data.repository.SqlDelightMetaProgressRepository
 import com.koke1024.craftdice.domain.battle.BattleEngine
 import com.koke1024.craftdice.domain.battle.ai.EnemyAI
+import com.koke1024.craftdice.domain.meta.MetaProgressionService
 import com.koke1024.craftdice.domain.physics.DicePhysicsEngine
 import com.koke1024.craftdice.domain.physics.PhysicsEngine
 import com.koke1024.craftdice.domain.roguelike.RunEngine
@@ -31,6 +36,11 @@ val appModule =
         singleOf(::RewardRoller)
         singleOf(::EventResolver)
         single { RunEngine(get(), get(), get()) }
+
+        single { CraftDiceDatabase(get<DatabaseDriverFactory>().createDriver()) }
+        singleOf(::SqlDelightMetaProgressRepository) { bind<MetaProgressRepository>() }
+        singleOf(::MetaProgressionService)
+
         viewModelOf(::HomeViewModel)
         viewModelOf(::BattleViewModel)
         viewModelOf(::DungeonViewModel)

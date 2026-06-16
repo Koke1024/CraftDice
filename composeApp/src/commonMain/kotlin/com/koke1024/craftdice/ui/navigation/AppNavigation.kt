@@ -31,8 +31,6 @@ fun AppNavigation(
     ) {
         composable(Routes.HOME) {
             HomeScreen(
-                onNavigateToBattle = { navController.navigate(Routes.BATTLE) },
-                onNavigateToCraft = { navController.navigate(Routes.CRAFT) },
                 onNavigateToDungeon = { navController.navigate(Routes.DUNGEON) },
             )
         }

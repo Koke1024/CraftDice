@@ -2,19 +2,26 @@ package com.koke1024.craftdice.ui.dungeon
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.koke1024.craftdice.data.repository.MetaProgressRepository
+import com.koke1024.craftdice.domain.battle.model.BattleConfig
 import com.koke1024.craftdice.domain.battle.model.BattleStatus
-import com.koke1024.craftdice.domain.model.Dice
-import com.koke1024.craftdice.domain.model.DiceFace
+import com.koke1024.craftdice.domain.meta.MetaProgressionService
+import com.koke1024.craftdice.domain.meta.RunStartConfig
+import com.koke1024.craftdice.domain.meta.runStartConfig
 import com.koke1024.craftdice.domain.roguelike.RunEngine
 import com.koke1024.craftdice.domain.roguelike.event.EventCatalog
 import com.koke1024.craftdice.domain.roguelike.model.CombatSummary
 import com.koke1024.craftdice.domain.roguelike.model.FloorNode
+import com.koke1024.craftdice.domain.roguelike.model.Reward
 import com.koke1024.craftdice.domain.roguelike.model.RunOutcome
 import com.koke1024.craftdice.domain.roguelike.model.RunStatus
 import com.koke1024.craftdice.domain.roguelike.model.RoomType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 /**
@@ -65,17 +72,29 @@ sealed interface DungeonUiState {
 
 class DungeonViewModel(
     private val runEngine: RunEngine,
+    private val metaRepository: MetaProgressRepository,
+    private val metaService: MetaProgressionService,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DungeonUiState>(DungeonUiState.Idle)
     val uiState: StateFlow<DungeonUiState> = _uiState.asStateFlow()
 
     private var lastMessage: String? = null
+    private var rewardsGranted: Boolean = false
 
     fun startRun(seed: Long = Random.nextLong()) {
-        runEngine.startRun(seed, listOf(defaultLoadout()))
-        lastMessage = null
-        refresh()
+        viewModelScope.launch {
+            val config = loadRunStartConfig()
+            runEngine.startRun(
+                seed = seed,
+                playerDice = config.dice,
+                hpPerUnit = BattleConfig.DEFAULT_HP + config.bonusStartingHp,
+                initialInventory = startingMaterialRewards(config.bonusStartingMaterial),
+            )
+            lastMessage = null
+            rewardsGranted = false
+            refresh()
+        }
     }
 
     fun moveTo(roomId: Int) {
@@ -130,6 +149,7 @@ class DungeonViewModel(
         val state = runEngine.state
         if (state.status.isFinished) {
             val outcome = runEngine.finish()
+            grantRunRewardIfNeeded(outcome)
             _uiState.value = DungeonUiState.Finished(
                 victory = outcome is RunOutcome.Victory,
                 metaCurrency = outcome.metaCurrency,
@@ -152,6 +172,26 @@ class DungeonViewModel(
             lastMessage = lastMessage,
         )
     }
+
+    private fun grantRunRewardIfNeeded(outcome: RunOutcome) {
+        if (rewardsGranted) return
+        rewardsGranted = true
+        val gained = outcome.metaCurrency
+        if (gained <= 0) return
+        viewModelScope.launch {
+            val progress = withContext(Dispatchers.IO) { metaRepository.load() }
+            val updated = metaService.grantShards(progress, gained)
+            withContext(Dispatchers.IO) { metaRepository.save(updated) }
+        }
+    }
+
+    private suspend fun loadRunStartConfig(): RunStartConfig {
+        val progress = withContext(Dispatchers.IO) { metaRepository.load() }
+        return metaService.runStartConfig(progress)
+    }
+
+    private fun startingMaterialRewards(bonus: Int): List<Reward> =
+        if (bonus > 0) listOf(Reward.DiceMaterial(bonus)) else emptyList()
 
     private fun roomView(node: FloorNode, state: com.koke1024.craftdice.domain.roguelike.model.RunState): RoomView {
         val reachable = node.id in state.currentRoom.nextNodeIds || node.id == state.currentRoomId
@@ -185,13 +225,4 @@ class DungeonViewModel(
         val meta = inventory.filterIsInstance<com.koke1024.craftdice.domain.roguelike.model.Reward.MetaCurrency>().sumOf { it.amount }
         return "面:$faces 素材:$material 欠片:$meta"
     }
-
-    private fun defaultLoadout(): Dice = Dice.of(
-        DiceFace.attack(4),
-        DiceFace.attack(4),
-        DiceFace.defense(),
-        DiceFace.heal(3),
-        DiceFace.critical(6),
-        DiceFace.miss(),
-    )
 }

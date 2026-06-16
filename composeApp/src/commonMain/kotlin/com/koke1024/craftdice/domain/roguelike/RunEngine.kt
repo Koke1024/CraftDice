@@ -1,5 +1,6 @@
 package com.koke1024.craftdice.domain.roguelike
 
+import com.koke1024.craftdice.domain.battle.model.BattleConfig
 import com.koke1024.craftdice.domain.battle.model.BattleStatus
 import com.koke1024.craftdice.domain.model.Dice
 import com.koke1024.craftdice.domain.roguelike.event.EventCatalog
@@ -58,10 +59,12 @@ class RunEngine(
         seed: Long,
         playerDice: List<Dice>,
         config: DungeonGenerationConfig = DungeonGenerationConfig(),
+        hpPerUnit: Int = BattleConfig.DEFAULT_HP,
+        initialInventory: List<Reward> = emptyList(),
     ): RunState {
         random = randomFactory(seed)
         val map = dungeonGenerator.generate(seed, config)
-        state = RunState.start(seed, playerDice, map)
+        state = RunState.start(seed, playerDice, map, hpPerUnit).addRewards(initialInventory)
         return state
     }
 

@@ -1,0 +1,10 @@
+CREATE TABLE meta_progress (
+    id INTEGER NOT NULL PRIMARY KEY,
+    dice_shards INTEGER NOT NULL,
+    total_earned INTEGER NOT NULL,
+    selected_class_id TEXT NOT NULL
+);
+
+CREATE TABLE purchased_upgrade (
+    upgrade_id TEXT NOT NULL PRIMARY KEY
+);
