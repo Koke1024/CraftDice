@@ -14,6 +14,9 @@ import com.koke1024.craftdice.domain.physics.PhysicsConstraints
 import com.koke1024.craftdice.domain.physics.PhysicsEngine
 import com.koke1024.craftdice.domain.physics.ThrowInput
 import com.koke1024.craftdice.domain.physics.Vector2
+import com.koke1024.craftdice.domain.roguelike.CombatSummaryBuilder
+import com.koke1024.craftdice.domain.roguelike.model.BattleSetup
+import com.koke1024.craftdice.ui.session.BattleSessionHolder
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -25,6 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class BattleViewModel(
+    private val sessionHolder: BattleSessionHolder,
     private val physicsEngine: PhysicsEngine = DicePhysicsEngine(),
     private val battleEngine: BattleEngine = BattleEngine(),
     private val enemyAI: EnemyAI = EnemyAI(),
@@ -38,15 +42,43 @@ class BattleViewModel(
     private var simulationJob: Job? = null
     private val diceOwner: MutableMap<Int, BattleSide> = mutableMapOf()
 
+    /**
+     * The [BattleSetup] this battle was launched with, or null for a
+     * standalone launch. Only dungeon-launched battles hand a
+     * [com.koke1024.craftdice.domain.roguelike.model.CombatSummary] back via
+     * the [sessionHolder].
+     */
+    private var currentSetup: BattleSetup? = null
+    private var resultPublished: Boolean = false
+
     init {
-        setupDefaultBattle()
+        val staged = sessionHolder.consumeSetup()
+        if (staged != null) {
+            seedFromSetup(staged)
+        } else {
+            setupDefaultBattle()
+        }
+    }
+
+    /**
+     * Initialises the engine from a [BattleSetup] handed over by the dungeon.
+     * Replaces the legacy auto-resolve: the player and enemy units (with their
+     * persistent HP/broken faces) are seeded straight into the [BattleEngine].
+     */
+    private fun seedFromSetup(setup: BattleSetup) {
+        currentSetup = setup
+        resultPublished = false
+        initBattle(
+            playerUnits = setup.playerUnits,
+            enemyUnits = setup.enemyUnits,
+            rule = setup.rule,
+            launchedFromDungeon = true,
+        )
     }
 
     fun setupDefaultBattle() {
-        simulationJob?.cancel()
-        physicsEngine.reset()
-        diceOwner.clear()
-
+        currentSetup = null
+        resultPublished = false
         val playerUnits = listOf(
             BattleUnit.fromDice(0, BattleSide.PLAYER1, "プレイヤーA", attackerDice(), BattleConfig.DEFAULT_HP),
             BattleUnit.fromDice(1, BattleSide.PLAYER1, "プレイヤーB", balancedDice(), BattleConfig.DEFAULT_HP),
@@ -55,6 +87,29 @@ class BattleViewModel(
             BattleUnit.fromDice(2, BattleSide.PLAYER2, "エネミーA", balancedDice(), BattleConfig.DEFAULT_HP),
             BattleUnit.fromDice(3, BattleSide.PLAYER2, "エネミーB", tankDice(), BattleConfig.DEFAULT_HP),
         )
+        initBattle(
+            playerUnits = playerUnits,
+            enemyUnits = enemyUnits,
+            rule = rule,
+            launchedFromDungeon = false,
+        )
+    }
+
+    /**
+     * Shared seeding path: resets physics, configures the [BattleEngine] for
+     * both sides under [rule], registers every unit on the tray, and emits the
+     * first [BattleUiState].
+     */
+    private fun initBattle(
+        playerUnits: List<BattleUnit>,
+        enemyUnits: List<BattleUnit>,
+        rule: BattleRule,
+        launchedFromDungeon: Boolean,
+    ) {
+        simulationJob?.cancel()
+        physicsEngine.reset()
+        diceOwner.clear()
+
         battleEngine.setup(playerUnits, enemyUnits, rule)
         registerAll(playerUnits + enemyUnits)
 
@@ -64,6 +119,7 @@ class BattleViewModel(
             enemyUnits = enemyUnits.map { it.toUnitUi() },
             round = battleEngine.round,
             status = battleEngine.state.status.toUi(),
+            launchedFromDungeon = launchedFromDungeon,
         )
     }
 
@@ -214,6 +270,26 @@ class BattleViewModel(
             log = log,
         )
         reseedPhysicsFromState()
+        publishResultIfNeeded()
+    }
+
+    /**
+     * When the battle reaches a terminal state, builds the
+     * [com.koke1024.craftdice.domain.roguelike.model.CombatSummary] from the
+     * resolved engine state and the originating [BattleSetup] and publishes it
+     * to the [sessionHolder] so the dungeon can sync it on resume.
+     *
+     * Only runs for dungeon-launched battles (a standalone launch has no
+     * [currentSetup]) and only once, so navigating back after a finished
+     * battle does not re-publish a stale result.
+     */
+    private fun publishResultIfNeeded() {
+        if (!battleEngine.isFinished) return
+        if (resultPublished) return
+        val setup = currentSetup ?: return
+        val summary = CombatSummaryBuilder.build(battleEngine.state, setup)
+        sessionHolder.publishResult(summary)
+        resultPublished = true
     }
 
     private fun reseedPhysicsFromState() {

@@ -45,6 +45,7 @@ fun AppNavigation(
         composable(Routes.DUNGEON) {
             DungeonScreen(
                 onNavigateBack = { navController.popBackStack() },
+                onNavigateToBattle = { navController.navigate(Routes.BATTLE) },
             )
         }
     }

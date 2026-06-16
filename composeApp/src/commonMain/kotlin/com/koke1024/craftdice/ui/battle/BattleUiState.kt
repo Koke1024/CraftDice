@@ -16,6 +16,12 @@ data class BattleUiState(
     val round: Int = 1,
     val status: BattleStatusUi = BattleStatusUi.ONGOING,
     val log: List<String> = emptyList(),
+    /**
+     * True when this battle was launched from the dungeon and must hand a
+     * [com.koke1024.craftdice.domain.roguelike.model.CombatSummary] back on
+     * exit. False for standalone launches, where Reset just re-seeds the demo.
+     */
+    val launchedFromDungeon: Boolean = false,
 )
 
 data class DiceSnapshotUi(

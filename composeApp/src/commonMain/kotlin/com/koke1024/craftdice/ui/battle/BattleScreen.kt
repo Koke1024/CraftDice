@@ -81,6 +81,7 @@ fun BattleScreen(
                 state = uiState,
                 onRollAll = { viewModel.throwAllDice() },
                 onReset = viewModel::setupDefaultBattle,
+                onConfirmResult = onNavigateBack.takeIf { uiState.launchedFromDungeon },
             )
 
             if (uiState.log.isNotEmpty()) {
@@ -216,6 +217,7 @@ private fun RollControls(
     state: BattleUiState,
     onRollAll: () -> Unit,
     onReset: () -> Unit,
+    onConfirmResult: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -229,11 +231,21 @@ private fun RollControls(
             Text(if (state.isRolling) "Rolling..." else if (state.status != BattleStatusUi.ONGOING) "Finished" else "Roll")
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Button(
-            onClick = onReset,
-            modifier = Modifier.weight(1f),
-        ) {
-            Text("Reset")
+        if (state.launchedFromDungeon) {
+            // Dungeon-launched battles must return a CombatSummary: show the
+            // "confirm result" button only once the fight is resolved, and no
+            // reset (resetting would discard the originating BattleSetup).
+            if (state.status != BattleStatusUi.ONGOING && onConfirmResult != null) {
+                Button(
+                    onClick = onConfirmResult,
+                    modifier = Modifier.weight(1f),
+                ) { Text("結果を確定") }
+            }
+        } else {
+            Button(
+                onClick = onReset,
+                modifier = Modifier.weight(1f),
+            ) { Text("Reset") }
         }
     }
 }

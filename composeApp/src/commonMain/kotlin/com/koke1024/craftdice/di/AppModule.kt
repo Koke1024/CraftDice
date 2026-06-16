@@ -18,6 +18,7 @@ import com.koke1024.craftdice.domain.roguelike.reward.RewardRoller
 import com.koke1024.craftdice.ui.battle.BattleViewModel
 import com.koke1024.craftdice.ui.dungeon.DungeonViewModel
 import com.koke1024.craftdice.ui.home.HomeViewModel
+import com.koke1024.craftdice.ui.session.BattleSessionHolder
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.core.module.dsl.singleOf
@@ -40,6 +41,7 @@ val appModule =
         single { CraftDiceDatabase(get<DatabaseDriverFactory>().createDriver()) }
         singleOf(::SqlDelightMetaProgressRepository) { bind<MetaProgressRepository>() }
         singleOf(::MetaProgressionService)
+        singleOf(::BattleSessionHolder)
 
         viewModelOf(::HomeViewModel)
         viewModelOf(::BattleViewModel)

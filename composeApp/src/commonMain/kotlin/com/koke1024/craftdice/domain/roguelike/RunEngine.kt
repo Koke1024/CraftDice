@@ -85,6 +85,7 @@ class RunEngine(
         return BattleSetup(
             playerUnits = state.playerUnits,
             enemyUnits = listOf(enemy.toUnit(ENEMY_ID_BASE)),
+            enemyTemplate = enemy,
         )
     }
 

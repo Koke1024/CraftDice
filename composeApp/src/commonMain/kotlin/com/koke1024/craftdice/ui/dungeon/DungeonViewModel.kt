@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.koke1024.craftdice.data.repository.MetaProgressRepository
 import com.koke1024.craftdice.domain.battle.model.BattleConfig
-import com.koke1024.craftdice.domain.battle.model.BattleStatus
 import com.koke1024.craftdice.domain.meta.MetaProgressionService
 import com.koke1024.craftdice.domain.meta.RunStartConfig
 import com.koke1024.craftdice.domain.meta.runStartConfig
@@ -16,9 +15,14 @@ import com.koke1024.craftdice.domain.roguelike.model.Reward
 import com.koke1024.craftdice.domain.roguelike.model.RunOutcome
 import com.koke1024.craftdice.domain.roguelike.model.RunStatus
 import com.koke1024.craftdice.domain.roguelike.model.RoomType
+import com.koke1024.craftdice.ui.session.BattleSessionHolder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,11 +44,13 @@ data class RoomView(
 /**
  * UI state for the dungeon screen.
  *
- * Phase 4 keeps the surface minimal: a readable map, current-room actions,
- * and a finished summary. Full battle integration (driving the Phase 3 battle
- * screen with [com.koke1024.craftdice.domain.roguelike.model.BattleSetup] and
- * returning the [CombatSummary]) is intentionally deferred — combat rooms here
- * are auto-resolved so the run loop is explorable end to end.
+ * Combat rooms route through the real battle screen:
+ * [DungeonViewModel.fightCurrentCombat] stages a
+ * [com.koke1024.craftdice.domain.roguelike.model.BattleSetup] via the
+ * [BattleSessionHolder] and emits [DungeonNavigation.NavigateToBattle]; the
+ * resolved [CombatSummary] is fed back through
+ * [DungeonViewModel.onCombatResult], which drives rewards / room-clear /
+ * run-end through the [RunEngine].
  */
 sealed interface DungeonUiState {
 
@@ -74,10 +80,21 @@ class DungeonViewModel(
     private val runEngine: RunEngine,
     private val metaRepository: MetaProgressRepository,
     private val metaService: MetaProgressionService,
+    private val battleSessionHolder: BattleSessionHolder,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DungeonUiState>(DungeonUiState.Idle)
     val uiState: StateFlow<DungeonUiState> = _uiState.asStateFlow()
+
+    /**
+     * One-shot navigation requests for the screen. Buffered so a request
+     * emitted while the UI is busy (e.g. mid-composition) is not lost.
+     */
+    private val _navigationEvents = MutableSharedFlow<DungeonNavigation>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val navigationEvents: SharedFlow<DungeonNavigation> = _navigationEvents.asSharedFlow()
 
     private var lastMessage: String? = null
     private var rewardsGranted: Boolean = false
@@ -104,21 +121,32 @@ class DungeonViewModel(
     }
 
     /**
-     * Auto-resolves the current combat room as a player victory so the run
-     * loop is explorable. Wired to the real battle flow in a later phase.
+     * Stages the current combat room's
+     * [com.koke1024.craftdice.domain.roguelike.model.BattleSetup] in the
+     * [BattleSessionHolder] and requests navigation to the battle screen.
+     * The battle layer resolves the fight and feeds the
+     * [CombatSummary] back via [onCombatResult].
      */
     fun fightCurrentCombat() {
         val room = runEngine.state.currentRoom
-        val enemy = room.enemy ?: return
+        if (room.enemy == null) return
         val setup = runEngine.currentBattleSetup()
-        val summary = CombatSummary(
-            status = BattleStatus.PLAYER1_WON,
-            survivingPlayerUnits = setup.playerUnits,
-            roundsFought = 1,
-            defeatedTemplate = enemy,
-        )
+        battleSessionHolder.launch(setup)
+        _navigationEvents.tryEmit(DungeonNavigation.NavigateToBattle)
+    }
+
+    /**
+     * Applies the [CombatSummary] resolved by the battle screen: syncs the
+     * survivors, rolls loot on a win, clears the room, and ends the run on a
+     * loss or boss kill.
+     */
+    fun onCombatResult(summary: CombatSummary) {
         runEngine.applyCombatResult(summary)
-        lastMessage = "${enemy.name}を撃破した！"
+        lastMessage = if (summary.playerWon) {
+            "${summary.defeatedTemplate?.name ?: "敵"}を撃破した！"
+        } else {
+            "戦闘に敗北した…"
+        }
         refresh()
     }
 

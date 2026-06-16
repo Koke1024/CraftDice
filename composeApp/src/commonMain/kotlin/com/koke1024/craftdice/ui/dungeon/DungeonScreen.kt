@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,24 +27,52 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.koke1024.craftdice.domain.roguelike.model.RoomType
+import com.koke1024.craftdice.ui.session.BattleSessionHolder
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Minimal dungeon map and run-loop surface (Phase 4).
+ * Dungeon map and run-loop surface.
  *
  * Shows the generated floors, the current room, and the action appropriate to
- * that room type. Combat is auto-resolved for now so the whole loop —
- * generate, traverse, fight, reward, die/win — is explorable; the polished
- * battle integration is a later phase.
+ * that room type. Combat rooms navigate to the real battle screen: the view
+ * model stages a [com.koke1024.craftdice.domain.roguelike.model.BattleSetup]
+ * via [BattleSessionHolder] and emits [DungeonNavigation.NavigateToBattle],
+ * and the resolved [com.koke1024.craftdice.domain.roguelike.model.CombatSummary]
+ * is drained from the holder on resume and applied.
  */
 @Composable
 fun DungeonScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToBattle: () -> Unit,
     viewModel: DungeonViewModel = koinViewModel(),
+    battleSessionHolder: BattleSessionHolder = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Translate the view model's navigation requests into NavController calls.
+    LaunchedEffect(Unit) {
+        viewModel.navigationEvents.collect { event ->
+            when (event) {
+                DungeonNavigation.NavigateToBattle -> onNavigateToBattle()
+            }
+        }
+    }
+
+    // When we come back from the battle screen, drain any published result and
+    // apply it. LifecycleEventEffect fires on every ON_RESUME, including the
+    // first composition, where there is nothing to drain.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME, lifecycleOwner = LocalLifecycleOwner.current) {
+        val summary = battleSessionHolder.consumeResult()
+        if (summary != null) {
+            viewModel.onCombatResult(summary)
+        }
+    }
 
     Scaffold { padding ->
         when (val ui = state) {
