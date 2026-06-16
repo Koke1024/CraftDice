@@ -119,3 +119,22 @@ sqldelight {
         }
     }
 }
+
+// SQLDelight のマイグレーション検証タスク（verify*Migration）は内部で sqlite-jdbc を使用し、
+// ネイティブライブラリを `java.io.tmpdir` に展開する。このタスクは Gradle の process isolation
+// worker（別 JVM）で実行される。一部の Windows 環境では worker JVM の `java.io.tmpdir` が
+// `C:\Windows`（書込不可）に解決され、展開に失敗してタスクのみがエラーになる。
+//
+// SQLDelight 2.3.2 (PR #5215) では worker の環境変数 TMP/TMPDIR に「Gradle デーモンの
+// java.io.tmpdir」を引き渡すようになった。そこで verify タスク実行直前（@TaskAction より前に
+// 走る doFirst・デーモン JVM 内）でデーモンの java.io.tmpdir を書込可能な build ディレクトリへ
+// 向けておけば、その値が worker に伝播して展開に成功する。
+// build ディレクトリは全プラットフォームで書込可能なためクロスプラットフォームに安全で、
+// DB スキーマ／マイグレーションのロジックには一切手を加えない。
+tasks.withType<app.cash.sqldelight.gradle.VerifyMigrationTask>().configureEach {
+    val sqliteTmpDir = layout.buildDirectory.dir("sqlite-tmp").get().asFile
+    doFirst {
+        sqliteTmpDir.mkdirs()
+        System.setProperty("java.io.tmpdir", sqliteTmpDir.absolutePath)
+    }
+}
