@@ -29,9 +29,12 @@ expect fun platformModule(): Module
 
 val appModule =
     module {
-        singleOf(::DicePhysicsEngine) { bind<PhysicsEngine>() }
-        singleOf(::BattleEngine)
-        singleOf(::EnemyAI)
+        // These engines take only primitive/functional constructor params with
+        // defaults, so singleOf(::X) would try (and fail) to resolve Double/Int
+        // from the Koin graph. Construct them with their Kotlin defaults instead.
+        single<PhysicsEngine> { DicePhysicsEngine() }
+        single { BattleEngine() }
+        single { EnemyAI() }
         single<EnemyCatalog> { DefaultEnemyCatalog.instance }
         single { DungeonGenerator(get()) }
         singleOf(::RewardRoller)
