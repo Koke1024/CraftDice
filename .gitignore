@@ -9,3 +9,9 @@ captures
 local.properties
 xcuserdata
 .kotlin
+node_modules/
+dist/
+target/
+tauriApp/src-tauri/gen/
+tauriApp/playwright-report/
+tauriApp/test-results/
