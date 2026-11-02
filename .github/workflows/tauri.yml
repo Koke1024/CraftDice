@@ -1,0 +1,56 @@
+name: Tauri
+
+on:
+  pull_request:
+    branches: [master, main]
+    paths: ['tauriApp/**', 'composeApp/src/commonMain/kotlin/**', 'composeApp/src/commonTest/kotlin/**', 'gradle/wrapper/**', '.github/workflows/tauri.yml']
+  push:
+    branches: [master, main]
+    paths: ['tauriApp/**', 'composeApp/src/commonMain/kotlin/**', 'composeApp/src/commonTest/kotlin/**', 'gradle/wrapper/**', '.github/workflows/tauri.yml']
+  workflow_dispatch:
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: tauriApp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tauriApp/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev patchelf
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Browser integration
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium && npx playwright test
+      - run: npm run tauri -- build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CraftDice-${{ matrix.os }}
+          path: |
+            tauriApp/src-tauri/target/release/bundle/**/*.exe
+            tauriApp/src-tauri/target/release/bundle/**/*.msi
+            tauriApp/src-tauri/target/release/bundle/**/*.dmg
+            tauriApp/src-tauri/target/release/bundle/**/*.deb
+            tauriApp/src-tauri/target/release/bundle/**/*.rpm
+            tauriApp/src-tauri/target/release/bundle/**/*.AppImage
+          if-no-files-found: error

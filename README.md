@@ -2,6 +2,8 @@
 
 Kotlin Multiplatform + Compose Multiplatform によるクラフトダイスゲーム。
 
+Tauri 2 のデスクトップ移植版は [`tauriApp/`](tauriApp/README.md) にあります。既存 Kotlin ドメインの探索・戦闘・物理演算・クラフト・永続強化を共有しています。
+
 ## 技術スタック
 
 - **言語/基盤**: Kotlin Multiplatform (KMP)

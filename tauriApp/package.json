@@ -1,0 +1,16 @@
+{
+  "name": "craftdice-tauri",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "core:build": "node scripts/core.mjs build",
+    "core:test": "node scripts/core.mjs test",
+    "dev": "npm run core:build && vite --host 127.0.0.1",
+    "build": "npm run core:build && tsc --noEmit && vite build",
+    "test": "npm run core:test && node --test tests/*.test.mjs",
+    "tauri": "tauri"
+  },
+  "dependencies": { "@tauri-apps/api": "^2.0.0" },
+  "devDependencies": { "@tauri-apps/cli": "^2.0.0", "typescript": "~5.9.3", "vite": "^7.0.0", "@playwright/test": "^1.56.0" }
+}

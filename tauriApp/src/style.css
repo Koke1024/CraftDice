@@ -1,0 +1,27 @@
+:root { font-family: "Yu Gothic UI", "Hiragino Sans", system-ui, sans-serif; color: #edf4ee; background: #14231f; color-scheme: dark; line-height: 1.6; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 18px 5%; background: #1f342c; border-bottom: 1px solid #476050; }
+header strong { font-size: 24px; letter-spacing: .04em; }
+main { max-width: 1080px; padding: 16px 24px 48px; margin: auto; }
+h1 { font-size: 26px; margin: 16px 0; } h2 { font-size: 17px; margin: 0 0 8px; } small { font-size: 16px; font-weight: normal; }
+p { margin: 8px 0 16px; } nav, .controls, .faces, .units { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 16px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+article { padding: 20px; border: 1px solid #476050; border-radius: 12px; background: #20352c; }
+button, input, select { font: inherit; border-radius: 7px; padding: 9px 14px; border: 1px solid #6b8773; }
+button { background: #d5e6b5; color: #1c2c1d; cursor: pointer; font-weight: 600; margin: 4px; }
+button:disabled { opacity: .5; cursor: default; } button:hover:enabled { background: #edf7d6; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid #f3c564; outline-offset: 3px; }
+button[aria-pressed="true"], button[aria-current] { border: 2px solid #f3c564; }
+input { width: 180px; } #value { width: 90px; }
+label { display: inline-flex; gap: 8px; align-items: center; }
+.muted { color: #b2c4b6; font-size: 14px; }
+.face { padding: 10px; border: 1px solid #617d6a; border-radius: 7px; background: #2b4537; }
+.ATK, .CRIT { color: #ffbca7; } .HEAL { color: #a1e6c6; } .DEF { color: #b9d8ff; }
+.map { display: grid; gap: 8px; margin: 20px 0; } .floor { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .floor > span { min-width: 45px; color: #b2c4b6; }
+.units article { flex: 1; min-width: 180px; } .enemy { border-color: #cb927b; } .player { border-color: #82cbb9; }
+meter { width: 100%; }
+canvas { display: block; background: #203f32; width: 100%; max-width: 480px; height: auto; margin: 0 auto; border: 3px solid #758365; border-radius: 12px; touch-action: none; }
+#notice:empty { display: none; } #notice { padding: 10px; border-left: 3px solid #f3c564; }
+.log { background: #101e18; border-radius: 8px; padding: 16px 32px; }
+@media (max-width: 600px) { main { padding: 12px; } header { padding: 14px; } .grid { grid-template-columns: 1fr; } }
